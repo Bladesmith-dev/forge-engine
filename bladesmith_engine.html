@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FORGE — Bladesmith Heat Treatment Engine</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1a1008;
+    --ember: #c94b0c;
+    --ember-glow: #e8631e;
+    --forge: #7a2e00;
+    --ash: #e8e2d9;
+    --smoke: #b0a898;
+    --steel: #3d3830;
+    --pale-ash: #f5f1eb;
+    --gold: #c48a1a;
+    --phase-a: #c94b0c;
+    --phase-b: #1a6b8a;
+    --phase-c: #5a7a1a;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--ink);
+    color: var(--ash);
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 300;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grid texture overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(200,150,80,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(200,150,80,0.03) 1px, transparent 1px);
+    background-size: 48px 48px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .layout {
+    position: relative;
+    z-index: 1;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 2.5rem 2rem 4rem;
+  }
+
+  /* Header */
+  header {
+    display: flex;
+    align-items: flex-end;
+    gap: 1.5rem;
+    margin-bottom: 3rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid rgba(201,75,12,0.3);
+  }
+
+  .wordmark {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 5rem;
+    line-height: 1;
+    letter-spacing: 0.05em;
+    color: var(--ember);
+    text-shadow: 0 0 40px rgba(201,75,12,0.4);
+  }
+
+  .tagline {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--smoke);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    line-height: 1.8;
+    padding-bottom: 0.5rem;
+  }
+
+  /* Main two-column layout */
+  .main-grid {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    gap: 2rem;
+    align-items: start;
+  }
+
+  /* Panel base */
+  .panel {
+    background: rgba(255,255,255,0.03);
+    border: 0.5px solid rgba(201,75,12,0.2);
+    border-radius: 4px;
+    padding: 1.5rem;
+  }
+
+  .panel-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--ember);
+    margin-bottom: 1.25rem;
+  }
+
+  /* Steel selector */
+  .steel-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 1.25rem;
+  }
+
+  .steel-card {
+    background: rgba(255,255,255,0.04);
+    border: 0.5px solid rgba(255,255,255,0.1);
+    border-radius: 3px;
+    padding: 0.7rem 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+  }
+
+  .steel-card:hover {
+    border-color: rgba(201,75,12,0.5);
+    background: rgba(201,75,12,0.06);
+  }
+
+  .steel-card.active {
+    border-color: var(--ember);
+    background: rgba(201,75,12,0.12);
+  }
+
+  .steel-card.active::before {
+    content: '';
+    position: absolute;
+    top: 6px; right: 6px;
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--ember);
+  }
+
+  .steel-name {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--ash);
+    letter-spacing: 0.05em;
+  }
+
+  .steel-type {
+    font-size: 0.65rem;
+    color: var(--smoke);
+    margin-top: 2px;
+  }
+
+  .steel-c {
+    font-size: 0.6rem;
+    color: var(--gold);
+    font-family: 'DM Mono', monospace;
+    margin-top: 4px;
+  }
+
+  /* Composition bar */
+  .comp-bar {
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255,255,255,0.06);
+    margin-top: 6px;
+    overflow: hidden;
+  }
+
+  .comp-fill {
+    height: 100%;
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--forge), var(--ember));
+  }
+
+  /* Desired outcome */
+  .outcome-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 1.25rem;
+  }
+
+  .outcome-btn {
+    background: rgba(255,255,255,0.03);
+    border: 0.5px solid rgba(255,255,255,0.1);
+    border-radius: 3px;
+    padding: 0.6rem;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.2s;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.78rem;
+    color: var(--smoke);
+  }
+
+  .outcome-btn:hover { border-color: rgba(201,75,12,0.4); color: var(--ash); }
+  .outcome-btn.active { border-color: var(--ember); color: var(--ember); background: rgba(201,75,12,0.08); }
+
+  /* Custom carbon input */
+  .field-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 1rem;
+  }
+
+  .field-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--smoke);
+    letter-spacing: 0.1em;
+    white-space: nowrap;
+    min-width: 60px;
+  }
+
+  input[type="range"] {
+    flex: 1;
+    height: 3px;
+    accent-color: var(--ember);
+    cursor: pointer;
+  }
+
+  .field-val {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--gold);
+    min-width: 40px;
+    text-align: right;
+  }
+
+  /* Run button */
+  .run-btn {
+    width: 100%;
+    background: var(--ember);
+    color: var(--ink);
+    border: none;
+    border-radius: 3px;
+    padding: 0.9rem;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.1rem;
+    letter-spacing: 0.15em;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: 0.5rem;
+  }
+
+  .run-btn:hover { background: var(--ember-glow); transform: translateY(-1px); }
+  .run-btn:active { transform: translateY(0); }
+
+  /* Output panel */
+  .output-panel { min-height: 520px; }
+
+  .placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 420px;
+    gap: 1rem;
+    opacity: 0.4;
+  }
+
+  .placeholder svg { opacity: 0.5; }
+
+  .placeholder p {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--smoke);
+    text-align: center;
+  }
+
+  /* Results */
+  .result-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+  }
+
+  .result-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.4rem;
+    color: var(--ash);
+    letter-spacing: 0.08em;
+  }
+
+  .hardness-badge {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    padding: 4px 12px;
+    border-radius: 2px;
+    background: rgba(201,75,12,0.15);
+    border: 0.5px solid var(--ember);
+    color: var(--ember);
+  }
+
+  /* Route steps */
+  .route-steps {
+    position: relative;
+    margin-bottom: 1.5rem;
+  }
+
+  .route-steps::before {
+    content: '';
+    position: absolute;
+    left: 18px;
+    top: 12px;
+    bottom: 12px;
+    width: 1px;
+    background: rgba(201,75,12,0.2);
+  }
+
+  .step {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    align-items: flex-start;
+    opacity: 0;
+    animation: stepIn 0.4s forwards;
+  }
+
+  .step:nth-child(1) { animation-delay: 0.05s; }
+  .step:nth-child(2) { animation-delay: 0.15s; }
+  .step:nth-child(3) { animation-delay: 0.25s; }
+  .step:nth-child(4) { animation-delay: 0.35s; }
+  .step:nth-child(5) { animation-delay: 0.45s; }
+
+  @keyframes stepIn {
+    from { opacity: 0; transform: translateX(-8px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  .step-num {
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    font-weight: 500;
+    position: relative;
+    z-index: 1;
+  }
+
+  .step-num.heat { background: rgba(201,75,12,0.15); border: 0.5px solid var(--ember); color: var(--ember); }
+  .step-num.quench { background: rgba(26,107,138,0.15); border: 0.5px solid #1a6b8a; color: #4aabcc; }
+  .step-num.temper { background: rgba(196,138,26,0.15); border: 0.5px solid var(--gold); color: var(--gold); }
+  .step-num.cycle { background: rgba(90,122,26,0.15); border: 0.5px solid #5a7a1a; color: #8ab54a; }
+
+  .step-body { flex: 1; padding-top: 4px; }
+
+  .step-name {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--ash);
+    margin-bottom: 2px;
+  }
+
+  .step-detail {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--smoke);
+    line-height: 1.6;
+  }
+
+  .step-temp {
+    display: inline-block;
+    margin-top: 4px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.68rem;
+    padding: 2px 8px;
+    border-radius: 2px;
+    background: rgba(255,255,255,0.05);
+    border: 0.5px solid rgba(255,255,255,0.1);
+    color: var(--gold);
+  }
+
+  /* Phase diagram strip */
+  .phase-strip {
+    margin-bottom: 1.5rem;
+  }
+
+  .phase-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--smoke);
+    margin-bottom: 8px;
+  }
+
+  .phase-svg-wrap {
+    border: 0.5px solid rgba(255,255,255,0.07);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  /* Properties grid */
+  .props-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 1.5rem;
+  }
+
+  .prop-card {
+    background: rgba(255,255,255,0.03);
+    border: 0.5px solid rgba(255,255,255,0.07);
+    border-radius: 3px;
+    padding: 0.65rem 0.85rem;
+    opacity: 0;
+    animation: stepIn 0.4s forwards;
+  }
+
+  .prop-card:nth-child(1) { animation-delay: 0.5s; }
+  .prop-card:nth-child(2) { animation-delay: 0.6s; }
+  .prop-card:nth-child(3) { animation-delay: 0.7s; }
+
+  .prop-name {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--smoke);
+    margin-bottom: 4px;
+  }
+
+  .prop-val {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: var(--ash);
+  }
+
+  .prop-unit { font-size: 0.65rem; color: var(--smoke); margin-left: 2px; }
+
+  /* Thermodynamic note */
+  .thermo-note {
+    background: rgba(90,122,26,0.07);
+    border: 0.5px solid rgba(90,122,26,0.3);
+    border-radius: 3px;
+    padding: 0.85rem 1rem;
+    font-size: 0.75rem;
+    color: rgba(180,200,140,0.8);
+    line-height: 1.7;
+    font-family: 'DM Mono', monospace;
+    opacity: 0;
+    animation: stepIn 0.4s 0.8s forwards;
+  }
+
+  .thermo-note strong { color: #a0c060; font-weight: 500; }
+
+  /* Warning note */
+  .warn-note {
+    background: rgba(201,75,12,0.07);
+    border: 0.5px solid rgba(201,75,12,0.25);
+    border-radius: 3px;
+    padding: 0.65rem 0.85rem;
+    font-size: 0.72rem;
+    color: rgba(232,160,100,0.8);
+    line-height: 1.6;
+    font-family: 'DM Mono', monospace;
+    margin-top: 0.75rem;
+  }
+
+  /* Phase diagram SVG */
+  .diagram-area { height: 120px; }
+
+  /* Divider */
+  .divider {
+    height: 0.5px;
+    background: rgba(255,255,255,0.07);
+    margin: 1.5rem 0;
+  }
+
+  /* Tags */
+  .tag {
+    display: inline-block;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.1em;
+    padding: 2px 6px;
+    border-radius: 2px;
+    text-transform: uppercase;
+  }
+
+  .tag-blade { background: rgba(26,107,138,0.15); border: 0.5px solid rgba(26,107,138,0.4); color: #4aabcc; }
+  .tag-tool { background: rgba(196,138,26,0.15); border: 0.5px solid rgba(196,138,26,0.4); color: var(--gold); }
+  .tag-spring { background: rgba(90,122,26,0.15); border: 0.5px solid rgba(90,122,26,0.4); color: #8ab54a; }
+
+  @media (max-width: 760px) {
+    .main-grid { grid-template-columns: 1fr; }
+    .wordmark { font-size: 3.5rem; }
+  }
+
+  /* Selected steel info */
+  .steel-info-bar {
+    background: rgba(201,75,12,0.07);
+    border: 0.5px solid rgba(201,75,12,0.2);
+    border-radius: 3px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--smoke);
+    line-height: 1.8;
+    display: none;
+  }
+
+  .steel-info-bar.visible { display: block; }
+  .steel-info-bar span { color: var(--gold); }
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <header>
+    <div class="wordmark">FORGE</div>
+    <div class="tagline">
+      Fe-C Heat Treatment Engine<br>
+      Thermodynamically Backed · Bladesmith Edition
+    </div>
+  </header>
+
+  <div class="main-grid">
+
+    <!-- LEFT: Input Panel -->
+    <div>
+      <div class="panel" style="margin-bottom:1.25rem;">
+        <div class="panel-label">01 / Select Steel</div>
+
+        <div class="steel-grid" id="steelGrid">
+
+          <div class="steel-card active" data-steel="1084" data-c="0.84" data-mn="0.6" data-cr="0" data-type="simple" onclick="selectSteel(this)">
+            <div class="steel-name">1084</div>
+            <div class="steel-type">High-carbon plain</div>
+            <div class="steel-c">C: 0.84% · Mn: 0.6%</div>
+            <div class="comp-bar"><div class="comp-fill" style="width:55%"></div></div>
+          </div>
+
+          <div class="steel-card" data-steel="1095" data-c="0.95" data-mn="0.45" data-cr="0" data-type="simple" onclick="selectSteel(this)">
+            <div class="steel-name">1095</div>
+            <div class="steel-type">High-carbon plain</div>
+            <div class="steel-c">C: 0.95% · Mn: 0.45%</div>
+            <div class="comp-bar"><div class="comp-fill" style="width:62%"></div></div>
+          </div>
+
+          <div class="steel-card" data-steel="5160" data-c="0.60" data-mn="0.88" data-cr="0.78" data-type="spring" onclick="selectSteel(this)">
+            <div class="steel-name">5160</div>
+            <div class="steel-type">Cr–spring alloy</div>
+            <div class="steel-c">C: 0.60% · Cr: 0.78%</div>
+            <div class="comp-bar"><div class="comp-fill" style="width:38%"></div></div>
+          </div>
+
+          <div class="steel-card" data-steel="O1" data-c="0.90" data-mn="1.2" data-cr="0.5" data-type="tool" onclick="selectSteel(this)">
+            <div class="steel-name">O1</div>
+            <div class="steel-type">Oil-hardening tool</div>
+            <div class="steel-c">C: 0.90% · Mn: 1.2%</div>
+            <div class="comp-bar"><div class="comp-fill" style="width:58%"></div></div>
+          </div>
+
+          <div class="steel-card" data-steel="W2" data-c="1.0" data-mn="0.25" data-cr="0" data-type="tool" onclick="selectSteel(this)">
+            <div class="steel-name">W2</div>
+            <div class="steel-type">Water-hardening tool</div>
+            <div class="steel-c">C: 1.0% · V: 0.25%</div>
+            <div class="comp-bar"><div class="comp-fill" style="width:65%"></div></div>
+          </div>
+
+          <div class="steel-card" data-steel="D2" data-c="1.55" data-mn="0.35" data-cr="12" data-type="tool" onclick="selectSteel(this)">
+            <div class="steel-name">D2</div>
+            <div class="steel-type">High-Cr tool steel</div>
+            <div class="steel-c">C: 1.55% · Cr: 12%</div>
+            <div class="comp-bar"><div class="comp-fill" style="width:85%"></div></div>
+          </div>
+
+        </div>
+
+        <div class="steel-info-bar visible" id="steelInfoBar">
+          Selected: <span id="infoName">1084</span> &nbsp;·&nbsp;
+          Ac1: <span id="infoAc1">727°C</span> &nbsp;·&nbsp;
+          Ac3: <span id="infoAc3">780°C</span> &nbsp;·&nbsp;
+          Ms: <span id="infoMs">265°C</span>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-bottom:1.25rem;">
+        <div class="panel-label">02 / Desired Outcome</div>
+        <div class="outcome-row" id="outcomeGrid">
+          <div class="outcome-btn active" data-outcome="hard-edge" onclick="selectOutcome(this)">Hard Edge<br><span style="font-size:0.62rem;color:var(--smoke)">max cutting</span></div>
+          <div class="outcome-btn" data-outcome="tough-blade" onclick="selectOutcome(this)">Tough Blade<br><span style="font-size:0.62rem;color:var(--smoke)">impact resist.</span></div>
+          <div class="outcome-btn" data-outcome="spring-temper" onclick="selectOutcome(this)">Spring Temper<br><span style="font-size:0.62rem;color:var(--smoke)">flex + recover</span></div>
+          <div class="outcome-btn" data-outcome="differential" onclick="selectOutcome(this)">Differential HT<br><span style="font-size:0.62rem;color:var(--smoke)">hamon / clay</span></div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-bottom:1.25rem;">
+        <div class="panel-label">03 / Override Parameters</div>
+
+        <div class="field-row">
+          <div class="field-label">Austenitize</div>
+          <input type="range" id="austTemp" min="760" max="1000" value="800" step="5" oninput="updateSliders()">
+          <div class="field-val" id="austVal">800°C</div>
+        </div>
+
+        <div class="field-row">
+          <div class="field-label">Temper °C</div>
+          <input type="range" id="temperTemp" min="150" max="350" value="200" step="5" oninput="updateSliders()">
+          <div class="field-val" id="temperVal">200°C</div>
+        </div>
+
+        <div class="field-row">
+          <div class="field-label">Cycles</div>
+          <input type="range" id="normCycles" min="1" max="3" value="2" step="1" oninput="updateSliders()">
+          <div class="field-val" id="cyclesVal">2×</div>
+        </div>
+      </div>
+
+      <button class="run-btn" onclick="runEngine()">▶ Generate Treatment Route</button>
+    </div>
+
+    <!-- RIGHT: Output Panel -->
+    <div class="panel output-panel" id="outputPanel">
+
+      <div class="placeholder" id="placeholder">
+        <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+          <circle cx="24" cy="24" r="20" stroke="rgba(201,75,12,0.4)" stroke-width="1"/>
+          <path d="M24 14 L24 24 L32 28" stroke="rgba(201,75,12,0.6)" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <p>Select steel + outcome<br>to generate route</p>
+      </div>
+
+      <div id="results" style="display:none;">
+        <!-- Dynamically populated -->
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+const STEELS = {
+  "1084": {
+    Ac1: 727, Ac3: 780, Ms: 265, Mf: 50,
+    notes: "Eutectoid-proximate. Minimal undissolved carbides. Extremely forgiving for beginners.",
+    hardenability: "low", quench: "oil",
+    hrMax: 64, alloying: "Mn hardenability contribution only",
+    tags: ["blade"]
+  },
+  "1095": {
+    Ac1: 727, Ac3: 774, Ms: 255, Mf: 40,
+    notes: "Hypereutectoid. Excess Fe₃C at GBs if austenitized low. Soak time critical.",
+    hardenability: "low", quench: "oil or water",
+    hrMax: 66, alloying: "plain C-Mn only",
+    tags: ["blade"]
+  },
+  "5160": {
+    Ac1: 730, Ac3: 793, Ms: 255, Mf: 45,
+    notes: "Cr delays pearlite nose → wider quench window. Excellent toughness at HRC 50–55.",
+    hardenability: "medium", quench: "oil",
+    hrMax: 62, alloying: "Cr increases hardenability; Mn aids dissolved C",
+    tags: ["spring"]
+  },
+  "O1": {
+    Ac1: 730, Ac3: 780, Ms: 235, Mf: 20,
+    notes: "Mn + Cr shift TTT right significantly. True oil hardening. Dimensional stability.",
+    hardenability: "medium", quench: "oil",
+    hrMax: 65, alloying: "Mn + Cr + W alloy carbides refine grain",
+    tags: ["tool"]
+  },
+  "W2": {
+    Ac1: 730, Ac3: 776, Ms: 250, Mf: 35,
+    notes: "V pins austenite grain. Hamon character. Water quench required for full hardness.",
+    hardenability: "low", quench: "water / brine",
+    hrMax: 67, alloying: "V grain refiner; otherwise plain",
+    tags: ["blade", "tool"]
+  },
+  "D2": {
+    Ac1: 800, Ac3: 870, Ms: 160, Mf: -80,
+    notes: "High Cr forms M₇C₃ carbides. Mf below 0°C → retained austenite. Cryo optional.",
+    hardenability: "very high", quench: "air",
+    hrMax: 62, alloying: "12% Cr semi-stainless; carbide network concern",
+    tags: ["tool"]
+  }
+};
+
+const ROUTES = {
+  "hard-edge": {
+    label: "Hard Edge — Max Cutting Performance",
+    badge: "HRC 60–64",
+    tempOffset: 0,
+    steps: (s, p) => [
+      { cls:"cycle", n:"N×"+p.cycles, title:"Normalizing Cycles", detail:`Thermal cycling for grain refinement and stress relief prior to hardening.`, temp:`${p.ac3 + 55}°C air cool` },
+      { cls:"heat", n:"A", title:"Austenitizing", detail:`Full soak to dissolve carbides into homogeneous austenite. Soak ${s === 'D2' ? '30–45' : '10–15'} min.`, temp:`${p.aust}°C` },
+      { cls:"quench", n:"Q", title:"Quench", detail:`Rapid quench to suppress diffusional transformation. Target: martensite formation below Ms.`, temp:`${STEELS[s].quench} — Ms: ${STEELS[s].Ms}°C` },
+      { cls:"temper", n:"T", title:"Double Temper", detail:`Two temper cycles. Relieves transformation stresses, converts some retained austenite. 1 hr each.`, temp:`${p.temper}°C × 2` },
+      { cls:"cycle", n:"✓", title:"Final Inspection", detail:`Check hardness (file test or Rockwell). Blade should skate file at HRC 58+. Inspect for warps.`, temp:`Ambient` }
+    ],
+    thermo: (s, p) => `Phase context: Austenitizing at ${p.aust}°C places steel fully in γ-austenite field (above Ac3 = ${p.ac3}°C). On quench, Ms = ${STEELS[s].Ms}°C triggers displacive γ→α' martensite. Carbon supersaturation in BCT lattice → hardness. Tempering precipitates ε-carbides at low T, then θ-Fe₃C at higher T, relieving tetragonality.`,
+    props: (s, p) => ({ HRC: `${STEELS[s].hrMax - 2}–${STEELS[s].hrMax}`, toughness:"Moderate", wear:"High" })
+  },
+  "tough-blade": {
+    label: "Tough Blade — Impact Resistant",
+    badge: "HRC 54–58",
+    tempOffset: 60,
+    steps: (s, p) => [
+      { cls:"cycle", n:"N×"+p.cycles, title:"Normalizing Cycles", detail:"Refine grain structure. Critical for toughness — fine ASTM grain size 8–10 targeted.", temp:`${p.ac3 + 55}°C air cool` },
+      { cls:"heat", n:"A", title:"Austenitizing", detail:"Lower end of austenitizing range — minimize grain growth. Shorter soak.", temp:`${p.aust - 20}°C · 8 min soak` },
+      { cls:"quench", n:"Q", title:"Interrupted Quench", detail:`Marquench or warm-oil quench (60–80°C). Reduces thermal gradient → less distortion, fewer cracks.`, temp:`Warm oil · 65°C` },
+      { cls:"temper", n:"T", title:"High Temper", detail:`Higher temper trades some hardness for substantial toughness gain via tempered martensite.`, temp:`${p.temper + p.tempOff}°C × 2 hr` },
+      { cls:"cycle", n:"✓", title:"Toughness Test", detail:"Edge should flex before chipping. Notch impact testing or bend test.", temp:`Ambient` }
+    ],
+    thermo: (s, p) => `Higher temper temperature (${p.temper + p.tempOff}°C) allows extensive Fe₃C precipitation and martensite recovery — transforming brittle plate martensite into tough lath/tempered martensite. Grain refinement via normalizing cycles maximizes toughness by limiting crack propagation path length along prior austenite grain boundaries.`,
+    props: (s, p) => ({ HRC: `54–57`, toughness:"High", wear:"Moderate" })
+  },
+  "spring-temper": {
+    label: "Spring Temper — Flex & Recovery",
+    badge: "HRC 44–52",
+    tempOffset: 120,
+    steps: (s, p) => [
+      { cls:"cycle", n:"N×"+p.cycles, title:"Normalize", detail:"Homogenize microstructure. Essential for uniform spring response.", temp:`${p.ac3 + 50}°C air cool` },
+      { cls:"heat", n:"A", title:"Austenitize", detail:"Fully austenitize for consistent martensite throughout section.", temp:`${p.aust}°C · 10 min` },
+      { cls:"quench", n:"Q", title:"Oil Quench", detail:`Full martensite formation, then immediately temper to avoid cracking.`, temp:`${STEELS[s].quench}` },
+      { cls:"temper", n:"T", title:"Spring Temper", detail:`High temper — transforms martensite into ferrite + fine carbide dispersion. Yields elastic, tough structure.`, temp:`${p.temper + 120}°C × 2 hr` },
+      { cls:"cycle", n:"✓", title:"Set Test", detail:"Bend test — blade should spring back fully. No permanent set at 90° deflection.", temp:`Ambient` }
+    ],
+    thermo: (s, p) => `Tempering at ${p.temper + 120}°C enters Stage III-IV tempering. Coherent ε-carbides dissolve, coarse θ-Fe₃C forms — reducing matrix tetragonality almost entirely. The result is a BCC α-ferrite matrix with fine carbide dispersion. High elastic strain energy capacity = spring behavior. Ideal for Cr-bearing steels like 5160 where Cr-carbides further stabilize.`,
+    props: (s, p) => ({ HRC: `44–51`, toughness:"Very High", wear:"Low–Mod" })
+  },
+  "differential": {
+    label: "Differential HT — Hamon / Clay Coat",
+    badge: "HRC 60+ edge / 40+ spine",
+    tempOffset: 0,
+    steps: (s, p) => [
+      { cls:"cycle", n:"N×"+p.cycles, title:"Normalize + Anneal", detail:"Critical baseline — uniform grain before clay application. Anneal to remove stresses.", temp:`${p.ac3 + 50}°C → slow cool` },
+      { cls:"heat", n:"C", title:"Apply Clay", detail:"Apply thin clay (satanite / refractory) to spine. Leave edge bare. Allow to fully dry.", temp:`Ambient — dry 24h` },
+      { cls:"heat", n:"A", title:"Even Austenitize", detail:`Heat entire blade evenly in forge or salt pot to austenitizing temperature.`, temp:`${p.aust}°C — uniform soak` },
+      { cls:"quench", n:"Q", title:"Water / Brine Quench", detail:"Edge quenches fast (martensite), spine slow through clay (pearlite/bainite). Hamon forms at transition.", temp:`Water — edge-down` },
+      { cls:"temper", n:"T", title:"Immediate Low Temper", detail:"Temper within 5 min of quench to prevent edge cracking from martensite stress.", temp:`${p.temper}°C × 1 hr` }
+    ],
+    thermo: (s, p) => `Differential hardening exploits the TTT diagram directly. The clay-insulated spine cools slowly, allowing diffusional transformation (pearlite / upper bainite) at ~550–650°C. The bare edge cools below the Ms (${STEELS[s].Ms}°C) before the pearlite nose — displacive martensite forms. The hamon (visible boundary) marks the transition zone where cooling rate crossed the CCT nose. W2's V-content makes the hamon particularly vivid.`,
+    props: (s, p) => ({ HRC: `60–64 edge`, toughness:"High spine", wear:"High edge" })
+  }
+};
+
+let selectedSteel = "1084";
+let selectedOutcome = "hard-edge";
+
+function selectSteel(el) {
+  document.querySelectorAll('.steel-card').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  selectedSteel = el.dataset.steel;
+  updateInfoBar();
+}
+
+function selectOutcome(el) {
+  document.querySelectorAll('.outcome-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  selectedOutcome = el.dataset.outcome;
+}
+
+function updateInfoBar() {
+  const s = STEELS[selectedSteel];
+  document.getElementById('infoName').textContent = selectedSteel;
+  document.getElementById('infoAc1').textContent = s.Ac1 + '°C';
+  document.getElementById('infoAc3').textContent = s.Ac3 + '°C';
+  document.getElementById('infoMs').textContent = s.Ms + '°C';
+}
+
+function updateSliders() {
+  document.getElementById('austVal').textContent = document.getElementById('austTemp').value + '°C';
+  document.getElementById('temperVal').textContent = document.getElementById('temperTemp').value + '°C';
+  document.getElementById('cyclesVal').textContent = document.getElementById('normCycles').value + '×';
+}
+
+function runEngine() {
+  const s = selectedSteel;
+  const steel = STEELS[s];
+  const route = ROUTES[selectedOutcome];
+
+  const params = {
+    aust: parseInt(document.getElementById('austTemp').value),
+    temper: parseInt(document.getElementById('temperTemp').value),
+    cycles: document.getElementById('normCycles').value,
+    ac3: steel.Ac3,
+    tempOff: route.tempOffset
+  };
+
+  const steps = route.steps(s, params);
+  const thermo = route.thermo(s, params);
+  const props = route.props(s, params);
+
+  // Build tag html
+  const tagMap = { blade: 'tag-blade', tool: 'tag-tool', spring: 'tag-spring' };
+  const tagLabels = { blade: 'Blade', tool: 'Tool', spring: 'Spring/Flex' };
+  const tags = steel.tags.map(t => `<span class="tag ${tagMap[t]}">${tagLabels[t]}</span>`).join(' ');
+
+  let stepsHtml = steps.map(st => `
+    <div class="step">
+      <div class="step-num ${st.cls}">${st.n}</div>
+      <div class="step-body">
+        <div class="step-name">${st.title}</div>
+        <div class="step-detail">${st.detail}</div>
+        <span class="step-temp">${st.temp}</span>
+      </div>
+    </div>
+  `).join('');
+
+  let phaseSvg = buildPhaseSvg(s, params.aust, params.temper, selectedOutcome);
+
+  let html = `
+    <div class="result-header">
+      <div>
+        <div class="result-title">${s} — ${route.label}</div>
+        <div style="margin-top:4px; font-size:0.72rem; color:var(--smoke); font-family:'DM Mono',monospace;">${tags} &nbsp; ${steel.alloying}</div>
+      </div>
+      <div class="hardness-badge">${route.badge}</div>
+    </div>
+
+    <div class="phase-strip">
+      <div class="phase-label">Thermal path — Fe-C phase context</div>
+      <div class="phase-svg-wrap">${phaseSvg}</div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="panel-label">Treatment Route</div>
+    <div class="route-steps">${stepsHtml}</div>
+
+    <div class="props-grid">
+      <div class="prop-card">
+        <div class="prop-name">Hardness</div>
+        <div class="prop-val">${props.HRC} <span class="prop-unit">HRC</span></div>
+      </div>
+      <div class="prop-card">
+        <div class="prop-name">Toughness</div>
+        <div class="prop-val" style="font-size:0.78rem">${props.toughness}</div>
+      </div>
+      <div class="prop-card">
+        <div class="prop-name">Wear Res.</div>
+        <div class="prop-val" style="font-size:0.78rem">${props.wear}</div>
+      </div>
+    </div>
+
+    <div class="thermo-note">
+      <strong>Thermodynamic basis:</strong> ${thermo}
+    </div>
+
+    <div class="warn-note">
+      ⚠ ${steel.notes}
+    </div>
+  `;
+
+  document.getElementById('placeholder').style.display = 'none';
+  const res = document.getElementById('results');
+  res.style.display = 'block';
+  res.innerHTML = html;
+}
+
+function buildPhaseSvg(steel, aust, temper, outcome) {
+  const s = STEELS[steel];
+  const w = 620, h = 120;
+
+  // Map temp to x (200°C–1000°C range)
+  const tMin = 200, tMax = 1000;
+  const tx = t => 20 + ((t - tMin) / (tMax - tMin)) * (w - 40);
+
+  const ac1x = tx(s.Ac1);
+  const ac3x = tx(s.Ac3);
+  const msx  = tx(s.Ms);
+  const austx = tx(aust);
+  const temperx = tx(temper);
+  const ambx = tx(220);
+
+  // Phase region colors
+  return `<svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:120px;background:#111008;">
+
+    <!-- Phase bands -->
+    <rect x="20" y="10" width="${ac1x - 20}" height="70" fill="rgba(26,107,138,0.12)" rx="0"/>
+    <rect x="${ac1x}" y="10" width="${ac3x - ac1x}" height="70" fill="rgba(201,75,12,0.08)" rx="0"/>
+    <rect x="${ac3x}" y="10" width="${w - 40 - (ac3x - 20)}" height="70" fill="rgba(201,75,12,0.15)" rx="0"/>
+
+    <!-- Phase labels -->
+    <text x="${(20 + ac1x)/2}" y="50" text-anchor="middle" font-family="DM Mono,monospace" font-size="9" fill="rgba(74,171,204,0.7)">α + Fe₃C</text>
+    <text x="${(ac1x + ac3x)/2}" y="50" text-anchor="middle" font-family="DM Mono,monospace" font-size="8" fill="rgba(201,75,12,0.7)">α+γ</text>
+    <text x="${(ac3x + w - 20)/2}" y="50" text-anchor="middle" font-family="DM Mono,monospace" font-size="9" fill="rgba(201,75,12,0.9)">γ austenite</text>
+
+    <!-- Ac1, Ac3 lines -->
+    <line x1="${ac1x}" y1="8" x2="${ac1x}" y2="80" stroke="rgba(201,75,12,0.5)" stroke-width="0.5" stroke-dasharray="3,3"/>
+    <line x1="${ac3x}" y1="8" x2="${ac3x}" y2="80" stroke="rgba(201,75,12,0.5)" stroke-width="0.5" stroke-dasharray="3,3"/>
+    <line x1="${msx}" y1="8" x2="${msx}" y2="80" stroke="rgba(74,171,204,0.5)" stroke-width="0.5" stroke-dasharray="3,3"/>
+
+    <!-- Ac labels -->
+    <text x="${ac1x}" y="7" text-anchor="middle" font-family="DM Mono,monospace" font-size="8" fill="rgba(201,75,12,0.8)">Ac1</text>
+    <text x="${ac3x}" y="7" text-anchor="middle" font-family="DM Mono,monospace" font-size="8" fill="rgba(201,75,12,0.8)">Ac3</text>
+    <text x="${msx}" y="7" text-anchor="middle" font-family="DM Mono,monospace" font-size="8" fill="rgba(74,171,204,0.8)">Ms</text>
+
+    <!-- Treatment path arrow -->
+    <polyline points="${austx},30 ${austx},55 ${msx + 15},55 ${ambx},70" fill="none" stroke="rgba(196,138,26,0.9)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <!-- Aust point -->
+    <circle cx="${austx}" cy="30" r="4" fill="var(--ember)" opacity="0.9"/>
+    <text x="${austx}" y="26" text-anchor="middle" font-family="DM Mono,monospace" font-size="8" fill="rgba(232,163,100,0.9)">${aust}°</text>
+
+    <!-- Temper point -->
+    <circle cx="${temperx}" cy="70" r="3" fill="rgba(196,138,26,0.9)"/>
+    <text x="${temperx}" y="85" text-anchor="middle" font-family="DM Mono,monospace" font-size="8" fill="rgba(196,138,26,0.8)">${temper}° temper</text>
+
+    <!-- Temp axis -->
+    <line x1="20" y1="80" x2="${w-20}" y2="80" stroke="rgba(255,255,255,0.15)" stroke-width="0.5"/>
+    <text x="20" y="95" font-family="DM Mono,monospace" font-size="8" fill="rgba(255,255,255,0.3)">200°C</text>
+    <text x="${w/2}" y="95" text-anchor="middle" font-family="DM Mono,monospace" font-size="8" fill="rgba(255,255,255,0.3)">600°C</text>
+    <text x="${w - 20}" y="95" text-anchor="end" font-family="DM Mono,monospace" font-size="8" fill="rgba(255,255,255,0.3)">1000°C</text>
+
+  </svg>`;
+}
+
+// Init
+updateInfoBar();
+updateSliders();
+</script>
+</body>
+</html>
